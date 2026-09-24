@@ -1,4 +1,21 @@
 services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: paperclip
+      POSTGRES_PASSWORD: "${PAPERCLIP_DB_ADMIN_PASSWORD:?Set a separate database admin password in Coolify}"
+      PAPERCLIP_DB_PASSWORD: "${PAPERCLIP_DB_PASSWORD:?Set a hex database password in Coolify}"
+    volumes:
+      - paperclip_postgres_data:/var/lib/postgresql/data
+      - ./paperclip-postgres-init.sh:/docker-entrypoint-initdb.d/10-paperclip.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d paperclip"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
   paperclip:
     build:
       context: .
@@ -6,7 +23,13 @@ services:
       target: production
     restart: unless-stopped
     pids_limit: 2048
+    depends_on:
+      db:
+        condition: service_healthy
     environment:
+      DATABASE_URL: "postgresql://paperclip:${PAPERCLIP_DB_PASSWORD:?Set a hex database password in Coolify}@db:5432/paperclip"
+      PAPERCLIP_MIGRATION_AUTO_APPLY: "true"
+      PAPERCLIP_MIGRATION_PROMPT: "never"
       NODE_ENV: production
       HOST: "0.0.0.0"
       PORT: "3100"
@@ -31,3 +54,4 @@ services:
 
 volumes:
   paperclip_data:
+  paperclip_postgres_data:
